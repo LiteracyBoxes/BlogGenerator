@@ -1,12 +1,13 @@
 <?php
 /*
-Plugin Name: BlogGenerator
+Plugin Name: Blog Generator
 Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: BlogGenerator用のカスタム関数をまとめたプラグイン
 Version: 1.0.0
 Author: ken
+Author URI: https://a-box365.com/
 */
 
 
