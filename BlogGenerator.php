@@ -6,7 +6,7 @@ GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Primary Branch: main
 Description: BlogGenerator用のカスタム関数をまとめたプラグイン
-Version: 1.0.1
+Version: 1.0.2
 Author: ken
 */
 
