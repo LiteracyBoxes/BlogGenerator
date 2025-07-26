@@ -6,9 +6,33 @@ GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Primary Branch: main
 Description: BlogGenerator用のカスタム関数をまとめたプラグイン
-Version: 1.0.2
+Version: 1.0.3
 Author: ken
 */
+
+/**
+ * 【Git Updater 用：更新時の手順メモ】
+ *
+ * 1. プラグインのコードを編集
+ * 2. このファイルの Version を更新（例: 1.0.0 → 1.0.1）
+ *
+ * 3. Git コミット & プッシュ
+ *    git add .
+ *    git commit -m "バージョンを1.0.xに更新"
+ *    git push
+ *
+ * 4. Git タグを作成してプッシュ（Version と同じに）
+ *    git tag 1.0.x
+ *    git push origin 1.0.x
+ *
+ * 5. WordPress 管理画面で更新確認
+ *    - 「Git Updater」→「Refresh Cache」
+ *    - 更新通知が出たら「更新」をクリック
+ *
+ * ※ 注意：
+ * - Version と タグ名は必ず一致させる（例：1.0.1）
+ * - タグを忘れると更新が通知されない
+ */
 
 
 if (!defined('ABSPATH')) exit;
