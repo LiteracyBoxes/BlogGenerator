@@ -7,7 +7,6 @@ GitHub Branch: main
 Description: BlogGenerator用のカスタム関数をまとめたプラグイン
 Version: 1.0.0
 Author: ken
-Author URI: https://a-box365.com/
 */
 
 
