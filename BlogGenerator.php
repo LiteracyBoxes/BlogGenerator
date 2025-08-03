@@ -18,12 +18,12 @@ Author: ken
  *
  * 3. Git コミット & プッシュ
  *    git add .
- *    git commit -m "バージョンを1.0.xに更新"
+ *    git commit -m "バージョンを1.0.3に更新"
  *    git push
  *
  * 4. Git タグを作成してプッシュ（Version と同じに）
- *    git tag 1.0.x
- *    git push origin 1.0.x
+ *    git tag 1.0.3
+ *    git push origin 1.0.3
  *
  * 5. WordPress 管理画面で更新確認
  *    - 「Git Updater」→「Refresh Cache」
@@ -453,7 +453,10 @@ function usd_price_shortcode($atts) {
 }
 add_shortcode('usd_price', 'usd_price_shortcode');
 
-
+// rssのエラー対策。URLはどのブログでもこれで固定。
+add_filter('rss2_ns', function() {
+    echo 'xmlns:media="http://search.yahoo.com/mrss/" ';
+});
 
 // 全ての外部リンクにrel="sponsored"を自動付加
 /*
