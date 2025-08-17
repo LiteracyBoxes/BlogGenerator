@@ -6,7 +6,7 @@ GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Primary Branch: main
 Description: BlogGenerator用のカスタム関数をまとめたプラグイン
-Version: 1.0.5
+Version: 1.0.6
 Author: ken
 */
 
@@ -18,12 +18,12 @@ Author: ken
  *
  * 3. Git コミット & プッシュ
  *    git add .
- *    git commit -m "rssエラー対策"
+ *    git commit -m "ポップアップおすすめカテゴリ表示"
  *    git push
  *
  * 4. Git タグを作成してプッシュ（Version と同じに）
- *    git tag 1.0.4
- *    git push origin 1.0.4
+ *    git tag 1.0.6
+ *    git push origin 1.0.6
  *
  * 5. WordPress 管理画面で更新確認
  *    - 「Git Updater」→「Refresh Cache」
@@ -457,6 +457,161 @@ add_shortcode('usd_price', 'usd_price_shortcode');
 add_filter('rss2_ns', function() {
     echo 'xmlns:media="http://search.yahoo.com/mrss/" ';
 });
+
+/**
+ * 言語に応じてカテゴリ名とポップアップのテキストを切り替える
+ */
+function recommend_category_popup() {
+    // サイトの言語設定を取得
+    $site_lang = get_bloginfo('language');
+    
+    // 言語によってカテゴリ名とポップアップのテキストを決定
+    if (strpos($site_lang, 'ja') === 0) {
+        // 日本語の場合
+        $category_name = 'おすすめ';
+        $popup_title = 'この記事に興味を持ったあなたにおすすめの商品・サービス一覧はこちら';
+        $popup_link_text = '「おすすめ」カテゴリへ';
+    } else {
+        // 英語など、日本語以外の場合
+        $category_name = 'Top Picks';
+        $popup_title = 'Recommended Products & Services Based on This Article';
+        $popup_link_text = 'Go to "Top Picks" category';
+    }
+
+    // 決定したカテゴリ名でカテゴリ情報を取得
+    $recommend_category = get_term_by('name', $category_name, 'category');
+    
+    // カテゴリが存在しない場合は処理を終了
+    if (!$recommend_category) {
+        return;
+    }
+
+    // カテゴリIDを取得
+    $recommend_category_id = $recommend_category->term_id;
+
+    // ポップアップの有効期限（クッキーの有効期間）を設定
+    $cookie_expire_hours = 24; // 24時間後に再表示
+
+    ?>
+    <style>
+        /* ポップアップのスタイル */
+        .recommend-popup {
+            position: fixed;
+            bottom: -150px; /* 初期状態では画面外に配置 */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 500px;
+            background-color: #fff;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+            padding: 15px 20px;
+            text-align: center;
+            z-index: 1000;
+            transition: bottom 0.5s ease-in-out;
+            display: none; /* 初期状態では非表示 */
+        }
+        .recommend-popup.visible {
+            bottom: 0; /* 表示時に画面内に移動 */
+        }
+        .recommend-popup h3 {
+            margin-top: 0;
+            padding-bottom: 0.5em;
+            font-size: 1rem;
+            color: #333;
+        }
+        .recommend-popup .popup-link {
+            display: block;
+            background-color: #0073aa;
+            color: #fff;
+            padding: 10px 15px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .recommend-popup .popup-link:hover {
+            background-color: #005177;
+        }
+        .recommend-popup .close-btn {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #ccc;
+            cursor: pointer;
+        }
+    </style>
+
+    <div id="recommend-category-popup" class="recommend-popup">
+        <button class="close-btn">&times;</button>
+        <h3><?php echo esc_html($popup_title); ?></h3>
+        <a href="<?php echo esc_url( get_category_link( $recommend_category_id ) ); ?>" class="popup-link">
+            <?php echo esc_html($popup_link_text); ?>
+        </a>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const popup = document.getElementById('recommend-category-popup');
+            const closeBtn = popup.querySelector('.close-btn');
+            const cookieName = 'recommendPopupDismissed';
+            const cookieExpiryHours = <?php echo intval($cookie_expire_hours); ?>;
+
+            // クッキーの値を読み込む関数
+            function getCookie(name) {
+                const nameEQ = name + "=";
+                const ca = document.cookie.split(';');
+                for(let i = 0; i < ca.length; i++) {
+                    let c = ca[i];
+                    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+                }
+                return null;
+            }
+
+            // クッキーをセットする関数
+            function setCookie(name, value, hours) {
+                let expires = "";
+                if (hours) {
+                    const date = new Date();
+                    date.setTime(date.getTime() + (hours * 60 * 60 * 1000));
+                    expires = "; expires=" + date.toUTCString();
+                }
+                document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+            }
+
+            // ポップアップを閉じるイベント
+            closeBtn.addEventListener('click', function() {
+                popup.classList.remove('visible');
+                setCookie(cookieName, 'true', cookieExpiryHours);
+            });
+
+            // スクロールイベントでポップアップを表示
+            window.addEventListener('scroll', function() {
+                // クッキーが存在しない場合にのみ実行
+                if (getCookie(cookieName) === null) {
+                    const scrollPosition = window.scrollY;
+                    const documentHeight = document.documentElement.scrollHeight;
+                    const windowHeight = window.innerHeight;
+
+                    // ページの約半分をスクロールしたらポップアップを表示
+                    if (scrollPosition > (documentHeight - windowHeight) / 10) {
+                        popup.style.display = 'block';
+                        setTimeout(() => {
+                            popup.classList.add('visible');
+                        }, 100); // 遅延させてアニメーションを適用
+                    }
+                }
+            });
+        });
+    </script>
+    <?php
+}
+add_action('wp_footer', 'recommend_category_popup');
 
 // 全ての外部リンクにrel="sponsored"を自動付加
 /*
