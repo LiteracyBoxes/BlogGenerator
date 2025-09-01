@@ -5,12 +5,12 @@ Plugin Name: BlogGenerator
 Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
-Description: BlogGenerator用のカスタム関数をまとめたプラグイン
-Version: 1.0.17
+Description: ブログ用のカスタム関数をまとめたプラグイン
+Version: 1.0.18
 Author: ken
 
 --- ChangeLog ---
-- テスト更新 / 6回目
+- テスト更新 / 8回目
 */
 
 
