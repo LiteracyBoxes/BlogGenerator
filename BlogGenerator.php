@@ -1,7 +1,7 @@
 <?php
 
 /*
-Plugin Name: BlogGenerator
+Plugin Name: Blog Generator
 Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
