@@ -6,11 +6,11 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.0.39
+Version: 1.1.0
 Author: ken
 
 --- ChangeLog ---
-- テスト更新 / 39回目
+- プラグイン自動更新処理追加
 */
 
 
@@ -77,6 +77,15 @@ add_filter('pre_set_site_transient_update_plugins', function ($transient) {
     
     return $transient;
 });
+
+// GitHubプラグインを常に自動更新
+add_filter('auto_update_plugin', function($update, $item) {
+    if ($item->slug === 'blog-generator') {
+        return true; // 自動更新を有効化
+    }
+    return $update;
+}, 10, 2);
+
 
 function custom_external_featured_image($html, $post_id, $post_thumbnail_id, $size, $attr) {
     $external_url = get_post_meta($post_id, 'external_thumbnail', true);
