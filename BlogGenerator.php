@@ -74,10 +74,6 @@ add_filter('auto_update_plugin', function($update, $item) {
     return $update;
 }, 10, 2);
 
-
-
-
-
 function custom_external_featured_image($html, $post_id, $post_thumbnail_id, $size, $attr) {
     $external_url = get_post_meta($post_id, 'external_thumbnail', true);
     if ($external_url) {
@@ -213,6 +209,12 @@ function box_Lead_func( $atts, $content = null ) {
 }
 add_shortcode('box_Lead', 'box_Lead_func');
 
+// ショートコード：[box_Section][/box_Section]
+function box_Section_func( $atts, $content = null ) {
+  $box_Section = '<!-- wp:cocoon-blocks/tab-box-1 {"label":"bb-point","backgroundColor":"watery-yellow","borderColor":"orange"} --><div class="box_Section wp-block-cocoon-blocks-tab-box-1 blank-box bb-tab bb-point block-box has-background has-border-color has-watery-yellow-background-color has-orange-border-color">' . $content . '</div><!-- /wp:cocoon-blocks/tab-box-1 -->';
+  return $box_Section;
+}
+add_shortcode('box_Section', 'box_Section_func');
 
 // ショートコード：[box_Check][/box_Check]
 function box_Check_func( $atts, $content = null ) {
