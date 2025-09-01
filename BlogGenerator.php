@@ -6,8 +6,11 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: BlogGenerator用のカスタム関数をまとめたプラグイン
-Version: 1.0.9
+Version: 1.0.10
 Author: ken
+
+--- ChangeLog ---
+- テスト更新
 */
 
 
@@ -43,30 +46,38 @@ Author: ken
 if (!defined('ABSPATH')) exit;
 
 // ----- GitHub から自動更新 -----
+// 改善案のコード
 add_filter('pre_set_site_transient_update_plugins', function ($transient) {
+    // APIから最新リリース情報を取得
+    $api_url = 'https://api.github.com/repos/LiteracyBoxes/BlogGenerator/releases/latest';
+    $response = wp_remote_get($api_url);
+
+    if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+        return $transient; // エラー時は処理を中断
+    }
+
+    $release_info = json_decode(wp_remote_retrieve_body($response));
+    $latest_version = $release_info->tag_name;
+    
+    // assetsからzipball_urlを取得、またはreleasesから直接ダウンロードURLを取得
+    $download_url = $release_info->zipball_url; 
+    
     $plugin_file = plugin_basename(__FILE__);
     $plugin_data = get_file_data(__FILE__, ['Version' => 'Version']);
-    $current_version = $plugin_data['Version']; // 現在のプラグインバージョン
-    $repo_owner = 'LiteracyBoxes';
-    $repo_name  = 'BlogGenerator';
+    $current_version = $plugin_data['Version'];
 
-    $api_url = "https://api.github.com/repos/$repo_owner/$repo_name/releases/latest";
-    $response = wp_remote_get($api_url, ['headers' => ['Accept' => 'application/vnd.github.v3+json']]);
-
-    if (!is_wp_error($response)) {
-        $data = json_decode(wp_remote_retrieve_body($response));
-        if ($data && isset($data->tag_name) && version_compare($data->tag_name, $current_version, '>')) {
-            $transient->response[$plugin_file] = (object) [
-                'slug'        => 'blog-generator',
-                'new_version' => $data->tag_name,
-                'url'         => $data->html_url,
-                'package'     => $data->zipball_url,
-                'changelog'   => $data->body, // ここでリリースノートを渡す
-            ];
-        }
+    if (version_compare($latest_version, $current_version, '>')) {
+        $transient->response[$plugin_file] = (object) [
+            'slug'        => 'blog-generator',
+            'new_version' => $latest_version,
+            'url'         => 'https://github.com/LiteracyBoxes/BlogGenerator',
+            'package'     => $download_url,
+        ];
     }
+    
     return $transient;
 });
+
 
 // 自動更新を有効化
 add_filter('auto_update_plugin', function($update, $item) {
