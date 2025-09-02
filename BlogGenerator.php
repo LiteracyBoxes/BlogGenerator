@@ -10,7 +10,7 @@ Version: 1.1.2
 Author: ken
 
 --- ChangeLog ---
-- rel="nofollow noopener sponsored" の自動付加をclass="affiliate-link"のみではなく全ての外部リンクを対象に変更 （画像リンク除外）。
+- rel= nofollow noopener sponsored の自動付加をclass= affiliate-link のみではなく全ての外部リンクを対象に変更 （画像リンク除外）。
 */
 
 
