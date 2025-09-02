@@ -6,41 +6,12 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.1.1
+Version: 1.1.2
 Author: ken
 
 --- ChangeLog ---
-- プラグイン自動更新処理のテスト
+- rel="nofollow noopener sponsored" の自動付加をclass="affiliate-link"のみではなく全ての外部リンクを対象に変更 （画像リンク除外）。
 */
-
-
-/**
- * 【Git Hubアップロード更新時の手順メモ】
- *
- * 1. プラグインのコードを編集
- * 2. このファイルの Version を更新（例: 1.0.0 → 1.0.1）したあとに、ファイルをzip化
- *
- * 3. Git コミット & プッシュ
- *    git add .
- *    git commit -m "異常クリック検知、アフィリンクrel属性変更"
- *    git push
- *
- * 4. Git タグを作成してプッシュ（Version と同じに）
- *    git tag 1.0.7
- *    git push origin 1.0.7
- * 
- *    gh auth login
- *    gh release create 1.0.7 BlogGenerator.zip --title "1.0.7" --notes "異常クリック検知、アフィリンクrel属性変更"
- *
- * 5. WordPress 管理画面で更新確認
- *    - 「Git Updater」→「Refresh Cache」
- *    - 更新通知が出たら「更新」をクリック
- *
- * ※ 注意：
- * - Version と タグ名は必ず一致させる（例：1.0.1）
- * - タグを忘れると更新が通知されない
- */
-
 
 
 if (!defined('ABSPATH')) exit;
@@ -932,21 +903,32 @@ function bg_render_dashboard_widget() {
     echo '</tbody></table></div>';
 }
 
-// 特定のクラス内の外部リンクにrel="sponsored"を自動付加
-function add_sponsored_to_specific_links($content) {
-    $target_class = 'affiliate-link';
+// 全ての外部リンクに rel="nofollow noopener sponsored" を自動付加（画像リンク除外）
+function add_sponsored_to_external_links($content) {
+    $site_url = get_site_url(); // 自サイトのURL
+    $image_extensions = ['jpg','jpeg','png','gif','webp','svg'];
 
     libxml_use_internal_errors(true);
     $dom = new DOMDocument();
     $dom->loadHTML(mb_convert_encoding($content, 'HTML-ENTITIES', 'UTF-8'));
     libxml_clear_errors();
 
-    $xpath = new DOMXPath($dom);
-    $nodes = $xpath->query('//*[contains(concat(" ", normalize-space(@class), " "), " ' . $target_class . ' ")]//a');
+    $anchors = $dom->getElementsByTagName('a');
 
-    foreach ($nodes as $anchor) {
-        // relを強制的に統一
-        $anchor->setAttribute('rel', 'nofollow noopener sponsored');
+    foreach ($anchors as $anchor) {
+        $href = $anchor->getAttribute('href');
+        if (!$href) continue;
+
+        // 画像リンクか判定
+        $path_info = pathinfo(parse_url($href, PHP_URL_PATH));
+        if (isset($path_info['extension']) && in_array(strtolower($path_info['extension']), $image_extensions)) {
+            continue; // 画像リンクは除外
+        }
+
+        // 外部リンクか判定
+        if (strpos($href, $site_url) !== 0 && preg_match('/^https?:\/\//i', $href)) {
+            $anchor->setAttribute('rel', 'nofollow noopener sponsored'); // relを強制設定
+        }
     }
 
     $modified_html = $dom->saveHTML();
@@ -954,7 +936,8 @@ function add_sponsored_to_specific_links($content) {
     $body_end = strpos($modified_html, '</body>');
     return substr($modified_html, $body_start, $body_end - $body_start);
 }
-add_filter('the_content', 'add_sponsored_to_specific_links', 20);
+
+add_filter('the_content', 'add_sponsored_to_external_links', 20);
 
 // https://a-ippon.com/wp-admin/?run_external_thumbnail_update=1
 
