@@ -6,11 +6,11 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.1.3
+Version: 1.1.4
 Author: ken
 
 --- ChangeLog ---
-- 自動更新コードのslugをblog-generatorからbloggeneratorに修正
+- アフィリンククリック計測用リダイレクトのrel属性もsponsored付与対象に修正
 */
 
 
@@ -729,56 +729,6 @@ function bg_handle_click_redirect() {
 }
 add_action('init', 'bg_handle_click_redirect');
 
-// ▼ 本文内リンク書き換え（アフィリエイトリンク対象）
-function bg_replace_affiliate_links($content) {
-    global $post;
-    if (empty($post)) return $content;
-
-    $pattern = '/<div class="affiliate-link">(.*?)<\/div>/is';
-
-    $content = preg_replace_callback($pattern, function($matches) use ($post) {
-        $block = $matches[1];
-
-        $block = preg_replace_callback(
-            '/<a\s+([^>]*href=["\'](https?:\/\/[^"\']+)["\'][^>]*)>(.*?)<\/a>/i',
-            function($aMatches) use ($post) {
-                $attributes = $aMatches[1];
-                $original_url = html_entity_decode($aMatches[2]);
-                $link_text  = $aMatches[3];
-
-                // 既存のrel属性を取得
-                preg_match('/rel=["\']([^"\']+)["\']/i', $attributes, $rel_matches);
-                $rel_str = isset($rel_matches[1]) ? $rel_matches[1] : '';
-
-                // rel属性を配列に変換し、'nofollow', 'noopener', 'sponsored'を必ず含めるようにする
-                $rel_array = array_map('trim', explode(' ', $rel_str));
-                $new_rel_array = array_unique(array_merge($rel_array, ['nofollow', 'noopener', 'sponsored']));
-                
-                // 新しいrel属性の文字列を生成
-                $new_rel = implode(' ', $new_rel_array);
-
-                $redirect_url = add_query_arg(
-                    array(
-                        'bg_click' => 1,
-                        'url'      => base64_encode(urldecode($original_url)),
-                        'id'       => $post->ID,
-                    ),
-                    home_url('/')
-                );
-
-                // rel属性とtarget属性を動的に設定
-                return '<a href="' . esc_url($redirect_url) . '" target="_blank" rel="nofollow noopener sponsored">'
-                        . $link_text . '</a>';
-            },
-            $block
-        );
-
-        return '<div class="affiliate-link">' . $block . '</div>';
-    }, $content);
-
-    return $content;
-}
-add_filter('the_content', 'bg_replace_affiliate_links');
 
 // ------------------------------
 // ダッシュボードウィジェット
@@ -903,9 +853,9 @@ function bg_render_dashboard_widget() {
     echo '</tbody></table></div>';
 }
 
-// 全ての外部リンクに rel="nofollow noopener sponsored" を自動付加（画像リンク除外）
+// 外部リンク＆クリック用リダイレクトリンクに rel="nofollow noopener sponsored"
 function add_sponsored_to_external_links($content) {
-    $site_url = get_site_url(); // 自サイトのURL
+    $site_url = get_site_url();
     $image_extensions = ['jpg','jpeg','png','gif','webp','svg'];
 
     libxml_use_internal_errors(true);
@@ -919,15 +869,20 @@ function add_sponsored_to_external_links($content) {
         $href = $anchor->getAttribute('href');
         if (!$href) continue;
 
-        // 画像リンクか判定
+        // 画像リンクは除外
         $path_info = pathinfo(parse_url($href, PHP_URL_PATH));
         if (isset($path_info['extension']) && in_array(strtolower($path_info['extension']), $image_extensions)) {
-            continue; // 画像リンクは除外
+            continue;
         }
 
-        // 外部リンクか判定
-        if (strpos($href, $site_url) !== 0 && preg_match('/^https?:\/\//i', $href)) {
-            $anchor->setAttribute('rel', 'nofollow noopener sponsored'); // relを強制設定
+        // 外部リンク判定
+        $is_external = (strpos($href, $site_url) !== 0 && preg_match('/^https?:\/\//i', $href));
+
+        // クリック用リダイレクトリンクも外部扱いにする
+        $is_click_redirect = (strpos($href, '?bg_click=1') !== false);
+
+        if ($is_external || $is_click_redirect) {
+            $anchor->setAttribute('rel', 'nofollow noopener sponsored');
         }
     }
 
@@ -938,6 +893,7 @@ function add_sponsored_to_external_links($content) {
 }
 
 add_filter('the_content', 'add_sponsored_to_external_links', 20);
+
 
 // https://a-ippon.com/wp-admin/?run_external_thumbnail_update=1
 
