@@ -18,7 +18,15 @@ if (!defined('ABSPATH')) exit;
 
 
 // ----- GitHub から自動更新 -----
+<?php
+if (!defined('ABSPATH')) exit;
+
+// ----- GitHub から自動更新 -----
 add_filter('pre_set_site_transient_update_plugins', function ($transient) {
+    $plugin_file = plugin_basename(__FILE__);
+    $plugin_data = get_file_data(__FILE__, ['Version' => 'Version']);
+    $current_version = $plugin_data['Version'];
+
     $api_url = 'https://api.github.com/repos/LiteracyBoxes/BlogGenerator/releases/latest';
     $response = wp_remote_get($api_url);
 
@@ -29,10 +37,6 @@ add_filter('pre_set_site_transient_update_plugins', function ($transient) {
     $release_info = json_decode(wp_remote_retrieve_body($response));
     $latest_version = $release_info->tag_name;
     $download_url = 'https://github.com/LiteracyBoxes/BlogGenerator/releases/download/' . $latest_version . '/bloggenerator.zip';
-
-    $plugin_file = plugin_basename(__FILE__);
-    $plugin_data = get_file_data(__FILE__, ['Version' => 'Version']);
-    $current_version = $plugin_data['Version'];
 
     if (version_compare($latest_version, $current_version, '>')) {
         $transient->response[$plugin_file] = (object) [
@@ -46,19 +50,18 @@ add_filter('pre_set_site_transient_update_plugins', function ($transient) {
     return $transient;
 });
 
-// プラグインの自動更新を即時実行
-add_action('admin_init', function() {
-    if (!is_admin()) return;
-
-    include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-
-    $upgrader = new Plugin_Upgrader();
+// ----- 管理画面アクセス時に即時更新 -----
+add_action('admin_init', function () {
+    $plugin_file = plugin_basename(__FILE__);
     $plugins = get_site_transient('update_plugins');
 
-    if (!empty($plugins->response['bloggenerator/bloggenerator.php'])) {
-        $upgrader->upgrade('bloggenerator/bloggenerator.php');
+    if (isset($plugins->response[$plugin_file])) {
+        include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+        $upgrader = new Plugin_Upgrader();
+        $upgrader->upgrade($plugin_file);
     }
 });
+
 
 
 // GitHubプラグインを常に自動更新
