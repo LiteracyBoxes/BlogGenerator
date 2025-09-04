@@ -6,11 +6,11 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.1.17
+Version: 1.1.18
 Author: ken
 
 --- ChangeLog ---
-- 1.1.14で管理画面アクセス時にプラグイン強制更新コードを追加。その検証
+- プラグイン強制更新コード削除
 */
 
 
@@ -18,25 +18,24 @@ if (!defined('ABSPATH')) exit;
 
 
 // ----- GitHub から自動更新 -----
-<?php
-if (!defined('ABSPATH')) exit;
-
-// ----- GitHub から自動更新 -----
 add_filter('pre_set_site_transient_update_plugins', function ($transient) {
-    $plugin_file = plugin_basename(__FILE__);
-    $plugin_data = get_file_data(__FILE__, ['Version' => 'Version']);
-    $current_version = $plugin_data['Version'];
-
+    // APIから最新リリース情報を取得
     $api_url = 'https://api.github.com/repos/LiteracyBoxes/BlogGenerator/releases/latest';
     $response = wp_remote_get($api_url);
 
     if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-        return $transient;
+        return $transient; // エラー時は処理を中断
     }
 
     $release_info = json_decode(wp_remote_retrieve_body($response));
     $latest_version = $release_info->tag_name;
+    
+    // assetsからzipball_urlを取得、またはreleasesから直接ダウンロードURLを取得
     $download_url = 'https://github.com/LiteracyBoxes/BlogGenerator/releases/download/' . $latest_version . '/bloggenerator.zip';
+    
+    $plugin_file = plugin_basename(__FILE__);
+    $plugin_data = get_file_data(__FILE__, ['Version' => 'Version']);
+    $current_version = $plugin_data['Version'];
 
     if (version_compare($latest_version, $current_version, '>')) {
         $transient->response[$plugin_file] = (object) [
@@ -46,23 +45,9 @@ add_filter('pre_set_site_transient_update_plugins', function ($transient) {
             'package'     => $download_url,
         ];
     }
-
+    
     return $transient;
 });
-
-// ----- 管理画面アクセス時に即時更新 -----
-add_action('admin_init', function () {
-    $plugin_file = plugin_basename(__FILE__);
-    $plugins = get_site_transient('update_plugins');
-
-    if (isset($plugins->response[$plugin_file])) {
-        include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
-        $upgrader = new Plugin_Upgrader();
-        $upgrader->upgrade($plugin_file);
-    }
-});
-
-
 
 // GitHubプラグインを常に自動更新
 add_filter('auto_update_plugin', function($update, $item) {
