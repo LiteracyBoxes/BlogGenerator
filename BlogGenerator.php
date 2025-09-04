@@ -6,11 +6,11 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.1.12
+Version: 1.1.13
 Author: ken
 
 --- ChangeLog ---
-- アップロードデータをbloggenerator/BlogGenerator.phpというフォルダ構造で圧縮するようにバッチ修正。本コードに変更無し。テスト更新5回目
+- アップロードデータをbloggenerator/BlogGenerator.phpというフォルダ構造で圧縮するようにバッチ修正。本コードに変更無し。テスト更新6回目
 */
 
 
@@ -19,20 +19,17 @@ if (!defined('ABSPATH')) exit;
 
 // ----- GitHub から自動更新 -----
 add_filter('pre_set_site_transient_update_plugins', function ($transient) {
-    // APIから最新リリース情報を取得
     $api_url = 'https://api.github.com/repos/LiteracyBoxes/BlogGenerator/releases/latest';
     $response = wp_remote_get($api_url);
 
     if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-        return $transient; // エラー時は処理を中断
+        return $transient;
     }
 
     $release_info = json_decode(wp_remote_retrieve_body($response));
     $latest_version = $release_info->tag_name;
-    
-    // assetsからzipball_urlを取得、またはreleasesから直接ダウンロードURLを取得
     $download_url = 'https://github.com/LiteracyBoxes/BlogGenerator/releases/download/' . $latest_version . '/bloggenerator.zip';
-    
+
     $plugin_file = plugin_basename(__FILE__);
     $plugin_data = get_file_data(__FILE__, ['Version' => 'Version']);
     $current_version = $plugin_data['Version'];
@@ -45,9 +42,24 @@ add_filter('pre_set_site_transient_update_plugins', function ($transient) {
             'package'     => $download_url,
         ];
     }
-    
+
     return $transient;
 });
+
+// プラグインの自動更新を即時実行
+add_action('admin_init', function() {
+    if (!is_admin()) return;
+
+    include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+
+    $upgrader = new Plugin_Upgrader();
+    $plugins = get_site_transient('update_plugins');
+
+    if (!empty($plugins->response['bloggenerator/bloggenerator.php'])) {
+        $upgrader->upgrade('bloggenerator/bloggenerator.php');
+    }
+});
+
 
 // GitHubプラグインを常に自動更新
 add_filter('auto_update_plugin', function($update, $item) {
