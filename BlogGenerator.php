@@ -6,11 +6,11 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.1.13
+Version: 1.1.14
 Author: ken
 
 --- ChangeLog ---
-- アップロードデータをbloggenerator/BlogGenerator.phpというフォルダ構造で圧縮するようにバッチ修正。本コードに変更無し。テスト更新6回目
+- アップロードデータをbloggenerator/BlogGenerator.phpというフォルダ構造で圧縮するようにバッチ修正。本コードに変更無し。テスト更新7回目
 */
 
 
