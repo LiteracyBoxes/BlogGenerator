@@ -6,14 +6,274 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.1.23
+Version: 1.2.1
 Author: ken
 --- ChangeLog ---
-- github-update-checkerの動作テスト
+- 自動更新機能追加
 */
 
 
 if (!defined('ABSPATH')) exit;
+
+
+// デフォルト設定
+function gh_updater_default_settings() {
+    return [
+        'plugin_file'   => 'bloggenerator/bloggenerator.php',
+        'github_user'   => 'LiteracyBoxes',
+        'github_repo'   => 'BlogGenerator',
+        'zip_name'      => 'bloggenerator.zip',
+        'check_interval'=> 5, // 分単位
+    ];
+}
+
+// ログ保存関数
+function gh_updater_log($message) {
+    $logs = get_option('gh_updater_logs', []);
+    $logs[] = '[' . date('Y-m-d H:i:s') . '] ' . $message;
+    if (count($logs) > 50) $logs = array_slice($logs, -50);
+    update_option('gh_updater_logs', $logs);
+}
+
+// プラグイン有効化時に初期設定とCRON登録
+register_activation_hook(__FILE__, function() {
+    if (!get_option('gh_updater_settings')) {
+        update_option('gh_updater_settings', gh_updater_default_settings());
+    }
+    if (!get_option('gh_updater_logs')) {
+        update_option('gh_updater_logs', []);
+    }
+    gh_updater_reschedule_cron();
+});
+
+// 無効化時にCRON解除
+register_deactivation_hook(__FILE__, function() {
+    $timestamp = wp_next_scheduled('gh_updater_cron_hook');
+    if ($timestamp) wp_unschedule_event($timestamp, 'gh_updater_cron_hook');
+});
+
+// CRONスケジュールのカスタム登録
+add_filter('cron_schedules', function($schedules) {
+    $settings = get_option('gh_updater_settings', gh_updater_default_settings());
+    $interval_minutes = max(1, intval($settings['check_interval']));
+    $schedules['gh_updater_custom'] = [
+        'interval' => $interval_minutes * MINUTE_IN_SECONDS,
+        'display'  => "{$interval_minutes}分ごと"
+    ];
+    return $schedules;
+});
+
+// CRON再スケジュール
+function gh_updater_reschedule_cron() {
+    $timestamp = wp_next_scheduled('gh_updater_cron_hook');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'gh_updater_cron_hook');
+    }
+    wp_schedule_event(time(), 'gh_updater_custom', 'gh_updater_cron_hook');
+}
+
+// 管理画面メニュー追加
+add_action('admin_menu', function() {
+    add_options_page(
+        'GitHub Updater Settings',
+        'GitHub Updater',
+        'manage_options',
+        'gh-updater',
+        'gh_updater_settings_page'
+    );
+});
+
+// 管理画面表示
+function gh_updater_settings_page() {
+    if (!current_user_can('manage_options')) return;
+
+    $settings = get_option('gh_updater_settings', gh_updater_default_settings());
+
+    if (isset($_POST['gh_updater_save'])) {
+        check_admin_referer('gh_updater_save_settings');
+
+        $settings = [
+            'plugin_file'    => sanitize_text_field($_POST['plugin_file']),
+            'github_user'    => sanitize_text_field($_POST['github_user']),
+            'github_repo'    => sanitize_text_field($_POST['github_repo']),
+            'zip_name'       => sanitize_text_field($_POST['zip_name']),
+            'check_interval' => max(1, intval($_POST['check_interval'])),
+        ];
+
+        update_option('gh_updater_settings', $settings);
+        gh_updater_reschedule_cron();
+
+        echo '<div class="updated"><p>設定を保存しました。</p></div>';
+    }
+
+    $preview_url = "https://github.com/{$settings['github_user']}/{$settings['github_repo']}/releases/download/latest/{$settings['zip_name']}";
+    $logs = get_option('gh_updater_logs', []);
+    ?>
+    <div class="wrap">
+        <h1>GitHub Updater 設定</h1>
+        <form method="post">
+            <?php wp_nonce_field('gh_updater_save_settings'); ?>
+            <table class="form-table">
+                <tr>
+                    <th>プラグインファイルパス</th>
+                    <td><input type="text" name="plugin_file" value="<?php echo esc_attr($settings['plugin_file']); ?>" size="50"></td>
+                </tr>
+                <tr>
+                    <th>GitHub ユーザー名</th>
+                    <td><input type="text" name="github_user" value="<?php echo esc_attr($settings['github_user']); ?>"></td>
+                </tr>
+                <tr>
+                    <th>GitHub リポジトリ名</th>
+                    <td><input type="text" name="github_repo" value="<?php echo esc_attr($settings['github_repo']); ?>"></td>
+                </tr>
+                <tr>
+                    <th>ZIPファイル名</th>
+                    <td><input type="text" name="zip_name" value="<?php echo esc_attr($settings['zip_name']); ?>"></td>
+                </tr>
+                <tr>
+                    <th>チェック間隔（分）</th>
+                    <td><input type="number" name="check_interval" value="<?php echo esc_attr($settings['check_interval']); ?>" min="1"></td>
+                </tr>
+                <tr>
+                    <th>ダウンロードURLプレビュー</th>
+                    <td>
+                        <code><?php echo esc_html($preview_url); ?></code>
+                        <p class="description">※最新版のタグ名を <code>latest</code> と仮定して生成したURLです。</p>
+                    </td>
+                </tr>
+            </table>
+            <p><input type="submit" name="gh_updater_save" class="button-primary" value="保存"></p>
+        </form>
+
+        <h2>更新ログ</h2>
+        <div style="background:#f9f9f9; padding:10px; border:1px solid #ddd; max-height:300px; overflow:auto;">
+            <?php
+            if(empty($logs)){
+                echo '<p>まだログはありません。</p>';
+            } else {
+                echo '<ul>';
+                foreach(array_reverse($logs) as $log){
+                    echo '<li>'.esc_html($log).'</li>';
+                }
+                echo '</ul>';
+            }
+            ?>
+        </div>
+    </div>
+    <?php
+}
+
+// ----------------------------------------------------
+// 更新チェックと自動アップデートのための主要なフック
+// ----------------------------------------------------
+
+add_action('gh_updater_cron_hook', 'gh_updater_check_and_update');
+
+/**
+ * GitHub APIをチェックし、必要であれば強制的にプラグインを更新する
+ */
+function gh_updater_check_and_update() {
+    $settings = get_option('gh_updater_settings', gh_updater_default_settings());
+    $api_url = "https://api.github.com/repos/{$settings['github_user']}/{$settings['github_repo']}/releases/latest";
+    gh_updater_log("GitHub APIチェック: $api_url");
+
+    $response = wp_remote_get($api_url, ['headers' => ['User-Agent' => 'WordPress']]);
+
+    if (is_wp_error($response)) {
+        gh_updater_log('GitHub API エラー: ' . $response->get_error_message());
+        return;
+    }
+
+    if (wp_remote_retrieve_response_code($response) !== 200) {
+        gh_updater_log('GitHub API レスポンスコード異常: ' . wp_remote_retrieve_response_code($response));
+        return;
+    }
+
+    $release_info = json_decode(wp_remote_retrieve_body($response));
+    if (!$release_info || empty($release_info->tag_name)) {
+        gh_updater_log('GitHub API レスポンスにtag_nameがありません');
+        return;
+    }
+
+    $latest_version_raw = $release_info->tag_name;
+    // バージョン番号から 'v' などのプレフィックスを削除
+    $latest_version = ltrim($latest_version_raw, 'vV');
+
+    $plugin_path = WP_PLUGIN_DIR . '/' . $settings['plugin_file'];
+    if (!file_exists($plugin_path)) {
+        gh_updater_log('プラグインファイルが存在しません: ' . $plugin_path);
+        return;
+    }
+
+    $plugin_data = get_plugin_data($plugin_path);
+    $current_version = $plugin_data['Version'];
+    gh_updater_log("現在バージョン: $current_version");
+
+    if (version_compare($latest_version, $current_version, '>')) {
+        gh_updater_log("更新開始: 現在バージョン={$current_version}, 最新={$latest_version}");
+        $download_url = "https://github.com/{$settings['github_user']}/{$settings['github_repo']}/releases/download/{$latest_version_raw}/{$settings['zip_name']}";
+        gh_updater_log("ダウンロードURL: $download_url");
+        gh_updater_force_update($settings['plugin_file'], $download_url);
+    } else {
+        gh_updater_log("更新不要: 現在バージョン={$current_version}, 最新={$latest_version}");
+    }
+}
+
+/**
+ * 強制的にプラグインを更新する関数
+ *
+ * @param string $plugin_file プラグインファイルパス
+ * @param string $download_url ダウンロードURL
+ */
+function gh_updater_force_update($plugin_file, $download_url) {
+    if (!class_exists('WP_Upgrader_Skin')) {
+        include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+    }
+    if (!function_exists('download_url')) {
+        include_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+    
+    // プラグインが有効化されているか確認し、一時的に無効化
+    $active_plugins = get_option('active_plugins');
+    $is_active = in_array($plugin_file, $active_plugins);
+    if ($is_active) {
+        deactivate_plugins($plugin_file);
+        gh_updater_log('プラグインを一時的に無効化しました。');
+    }
+
+    gh_updater_log("ZIPダウンロード開始");
+    $tmp_file = download_url($download_url);
+
+    if (is_wp_error($tmp_file)) {
+        gh_updater_log('ZIPダウンロード失敗: ' . $tmp_file->get_error_message());
+        return;
+    }
+    gh_updater_log("ZIPダウンロード完了: $tmp_file");
+
+    $upgrader = new Plugin_Upgrader(new Automatic_Upgrader_Skin());
+    
+    gh_updater_log("展開・アップグレード開始");
+    $result = $upgrader->run(['package' => $tmp_file, 'destination' => WP_PLUGIN_DIR, 'clear_destination' => true, 'clear_working' => true, 'hook_extra' => ['plugin' => $plugin_file]]);
+
+    if (is_wp_error($result)) {
+        gh_updater_log('更新失敗: ' . $result->get_error_message());
+    } else {
+        gh_updater_log('更新完了');
+    }
+
+    // プラグインを再度有効化
+    if ($is_active) {
+        $result = activate_plugin($plugin_file);
+        if (is_wp_error($result)) {
+            gh_updater_log('プラグインの再有効化に失敗しました: ' . $result->get_error_message());
+        } else {
+            gh_updater_log('プラグインを再有効化しました。');
+        }
+    }
+
+    @unlink($tmp_file); // 一時ファイル削除
+}
+
 
 function custom_external_featured_image($html, $post_id, $post_thumbnail_id, $size, $attr) {
     $external_url = get_post_meta($post_id, 'external_thumbnail', true);
