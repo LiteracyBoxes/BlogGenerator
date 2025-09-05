@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.2.3
+Version: 1.2.4
 Author: ken
 --- ChangeLog ---
-- 自動更新機能追加後のテスト更新
+- GitHubをプライベートリポジトリに変更。トークンを設定画面から追加できるように。
 */
 
 
@@ -23,18 +23,15 @@ function gh_updater_default_settings() {
         'github_user'   => 'LiteracyBoxes',
         'github_repo'   => 'BlogGenerator',
         'zip_name'      => 'bloggenerator.zip',
-        'check_interval'=> 1, // 分単位
+        'check_interval'=> 60, // 分単位
+        'github_token'  => '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', // GitHub Personal Access Token
     ];
 }
 
-// ログ保存関数（WordPressタイムゾーンで統一）
+// ログ保存関数
 function gh_updater_log($message) {
-    $tz = new DateTimeZone(wp_timezone_string());
-    $dt = new DateTime('now', $tz);
-    $time = $dt->format('Y-m-d H:i:s');
-
     $logs = get_option('gh_updater_logs', []);
-    $logs[] = '[' . $time . '] ' . $message;
+    $logs[] = '[' . current_time('mysql') . '] ' . $message;
     if (count($logs) > 50) $logs = array_slice($logs, -50);
     update_option('gh_updater_logs', $logs);
 }
@@ -70,7 +67,9 @@ add_filter('cron_schedules', function($schedules) {
 // CRON再スケジュール
 function gh_updater_reschedule_cron() {
     $timestamp = wp_next_scheduled('gh_updater_cron_hook');
-    if ($timestamp) wp_unschedule_event($timestamp, 'gh_updater_cron_hook');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'gh_updater_cron_hook');
+    }
     wp_schedule_event(time(), 'gh_updater_custom', 'gh_updater_cron_hook');
 }
 
@@ -100,6 +99,7 @@ function gh_updater_settings_page() {
             'github_repo'    => sanitize_text_field($_POST['github_repo']),
             'zip_name'       => sanitize_text_field($_POST['zip_name']),
             'check_interval' => max(1, intval($_POST['check_interval'])),
+            'github_token'   => sanitize_text_field($_POST['github_token']),
         ];
 
         update_option('gh_updater_settings', $settings);
@@ -116,6 +116,13 @@ function gh_updater_settings_page() {
         <form method="post">
             <?php wp_nonce_field('gh_updater_save_settings'); ?>
             <table class="form-table">
+                <tr>
+                    <th>GitHub Personal Access Token</th>
+                    <td>
+                        <input type="text" name="github_token" value="<?php echo esc_attr($settings['github_token']); ?>" size="50">
+                        <p class="description">※API制限回避のために使用。未入力でも動作しますが、1時間に60回以上アクセスすると403になります。</p>
+                    </td>
+                </tr>
                 <tr>
                     <th>プラグインファイルパス</th>
                     <td><input type="text" name="plugin_file" value="<?php echo esc_attr($settings['plugin_file']); ?>" size="50"></td>
@@ -179,7 +186,13 @@ function gh_updater_check_and_update() {
     $api_url = "https://api.github.com/repos/{$settings['github_user']}/{$settings['github_repo']}/releases/latest";
     gh_updater_log("GitHub APIチェック: $api_url");
 
-    $response = wp_remote_get($api_url, ['headers' => ['User-Agent' => 'WordPress']]);
+    $headers = ['User-Agent' => 'WordPress'];
+    if (!empty($settings['github_token'])) {
+        $headers['Authorization'] = 'token ' . $settings['github_token'];
+    }
+
+    $response = wp_remote_get($api_url, ['headers' => $headers]);
+
 
     if (is_wp_error($response)) {
         gh_updater_log('GitHub API エラー: ' . $response->get_error_message());
@@ -198,6 +211,7 @@ function gh_updater_check_and_update() {
     }
 
     $latest_version_raw = $release_info->tag_name;
+    // バージョン番号から 'v' などのプレフィックスを削除
     $latest_version = ltrim($latest_version_raw, 'vV');
 
     $plugin_path = WP_PLUGIN_DIR . '/' . $settings['plugin_file'];
@@ -234,6 +248,7 @@ function gh_updater_force_update($plugin_file, $download_url) {
         include_once ABSPATH . 'wp-admin/includes/file.php';
     }
     
+    // プラグインが有効化されているか確認し、一時的に無効化
     $active_plugins = get_option('active_plugins');
     $is_active = in_array($plugin_file, $active_plugins);
     if ($is_active) {
@@ -253,13 +268,7 @@ function gh_updater_force_update($plugin_file, $download_url) {
     $upgrader = new Plugin_Upgrader(new Automatic_Upgrader_Skin());
     
     gh_updater_log("展開・アップグレード開始");
-    $result = $upgrader->run([
-        'package' => $tmp_file,
-        'destination' => WP_PLUGIN_DIR,
-        'clear_destination' => true,
-        'clear_working' => true,
-        'hook_extra' => ['plugin' => $plugin_file]
-    ]);
+    $result = $upgrader->run(['package' => $tmp_file, 'destination' => WP_PLUGIN_DIR, 'clear_destination' => true, 'clear_working' => true, 'hook_extra' => ['plugin' => $plugin_file]]);
 
     if (is_wp_error($result)) {
         gh_updater_log('更新失敗: ' . $result->get_error_message());
@@ -267,6 +276,7 @@ function gh_updater_force_update($plugin_file, $download_url) {
         gh_updater_log('更新完了');
     }
 
+    // プラグインを再度有効化
     if ($is_active) {
         $result = activate_plugin($plugin_file);
         if (is_wp_error($result)) {
@@ -278,6 +288,7 @@ function gh_updater_force_update($plugin_file, $download_url) {
 
     @unlink($tmp_file); // 一時ファイル削除
 }
+
 
 function custom_external_featured_image($html, $post_id, $post_thumbnail_id, $size, $attr) {
     $external_url = get_post_meta($post_id, 'external_thumbnail', true);
