@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.2.5
+Version: 1.2.6
 Author: ken
 --- ChangeLog ---
-- GitHubをプライベートリポジトリに変更。トークンを設定画面から追加できるように。一部文言変更。
+- 自動更新機能追加後のテスト更新
 */
 
 
@@ -24,7 +24,7 @@ function gh_updater_default_settings() {
         'github_repo'   => 'BlogGenerator',
         'zip_name'      => 'bloggenerator.zip',
         'check_interval'=> 60, // 分単位
-        'github_token'  => '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', // GitHub Personal Access Token
+        'github_token'  => '', // GitHub Personal Access Token
     ];
 }
 
@@ -120,7 +120,7 @@ function gh_updater_settings_page() {
                     <th>GitHub Personal Access Token</th>
                     <td>
                         <input type="text" name="github_token" value="<?php echo esc_attr($settings['github_token']); ?>" size="50">
-                        <p class="description">※非公開リポジトリの場合は入力。公開リポジトリでも動作しますが、1時間に60回以上のAPIリクエストはアクセス禁止になります。</p>
+                        <p class="description">※API制限回避のために使用。未入力でも動作しますが、1時間に60回以上アクセスすると403になります。</p>
                     </td>
                 </tr>
                 <tr>
