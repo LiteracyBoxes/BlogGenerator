@@ -6,57 +6,14 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.1.21
+Version: 1.1.22
 Author: ken
-
 --- ChangeLog ---
-- 自動更新改善中
+- 自動更新処理のみ、github-update-checkerというプラグインを新規で作って移設
 */
 
 
 if (!defined('ABSPATH')) exit;
-
-
-// ----- GitHub から自動更新 -----
-add_filter('pre_set_site_transient_update_plugins', function ($transient) {
-    // APIから最新リリース情報を取得
-    $api_url = 'https://api.github.com/repos/LiteracyBoxes/BlogGenerator/releases/latest';
-    $response = wp_remote_get($api_url);
-
-    if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
-        return $transient; // エラー時は処理を中断
-    }
-
-    $release_info = json_decode(wp_remote_retrieve_body($response));
-    $latest_version = $release_info->tag_name;
-    
-    // assetsからzipball_urlを取得、またはreleasesから直接ダウンロードURLを取得
-    $download_url = 'https://github.com/LiteracyBoxes/BlogGenerator/releases/download/' . $latest_version . '/bloggenerator.zip';
-    
-    $plugin_file = plugin_basename(__FILE__);
-    $plugin_data = get_file_data(__FILE__, ['Version' => 'Version']);
-    $current_version = $plugin_data['Version'];
-
-    if (version_compare($latest_version, $current_version, '>')) {
-        $transient->response[$plugin_file] = (object) [
-            'slug'        => 'bloggenerator',
-            'new_version' => $latest_version,
-            'url'         => 'https://github.com/LiteracyBoxes/BlogGenerator',
-            'package'     => $download_url,
-        ];
-    }
-    
-    return $transient;
-});
-
-// GitHubプラグインを常に自動更新
-add_filter('auto_update_plugin', function($update, $item) {
-    if ($item->slug === 'bloggenerator') {
-        return true; // 自動更新を有効化
-    }
-    return $update;
-}, 10, 2);
-
 
 function custom_external_featured_image($html, $post_id, $post_thumbnail_id, $size, $attr) {
     $external_url = get_post_meta($post_id, 'external_thumbnail', true);
