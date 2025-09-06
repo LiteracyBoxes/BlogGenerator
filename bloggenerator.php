@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.2.18
+Version: 1.2.19
 Author: ken
 --- ChangeLog ---
-- テスト更新
+- test
 */
 
 
@@ -120,7 +120,7 @@ function gh_updater_settings_page() {
                     <th>GitHub Personal Access Token</th>
                     <td>
                         <input type="text" name="github_token" value="<?php echo esc_attr($settings['github_token']); ?>" size="50">
-                        <p class="description">※非公開リポジトリの場合は入力してください。</p>
+                        <p class="description">※非公開リポジトリの場合は入力。公開リポジトリでも動作しますが、1時間に60回以上のAPIリクエストはアクセス禁止になります。</p>
                     </td>
                 </tr>
                 <tr>
@@ -147,7 +147,7 @@ function gh_updater_settings_page() {
                     <th>ダウンロードURLプレビュー</th>
                     <td>
                         <code><?php echo esc_html($preview_url); ?></code>
-                        <p class="description">※最新版のタグ名を <code>latest</code> と仮定したURLです。</p>
+                        <p class="description">※最新版のタグ名を <code>latest</code> と仮定して生成したURLです。</p>
                     </td>
                 </tr>
             </table>
@@ -172,23 +172,33 @@ function gh_updater_settings_page() {
     <?php
 }
 
-// 更新チェック
+// ----------------------------------------------------
+// 更新チェックと自動アップデートのための主要なフック
+// ----------------------------------------------------
+
 add_action('gh_updater_cron_hook', 'gh_updater_check_and_update');
+
+/**
+ * GitHub APIをチェックし、必要であれば強制的にプラグインを更新する
+ */
 function gh_updater_check_and_update() {
     $settings = get_option('gh_updater_settings', gh_updater_default_settings());
     $api_url = "https://api.github.com/repos/{$settings['github_user']}/{$settings['github_repo']}/releases/latest";
+    gh_updater_log("GitHub APIチェック: $api_url");
+
     $headers = ['User-Agent' => 'WordPress'];
     if (!empty($settings['github_token'])) {
         $headers['Authorization'] = 'token ' . $settings['github_token'];
     }
 
-    gh_updater_log("GitHub APIチェック: $api_url");
     $response = wp_remote_get($api_url, ['headers' => $headers]);
+
 
     if (is_wp_error($response)) {
         gh_updater_log('GitHub API エラー: ' . $response->get_error_message());
         return;
     }
+
     if (wp_remote_retrieve_response_code($response) !== 200) {
         gh_updater_log('GitHub API レスポンスコード異常: ' . wp_remote_retrieve_response_code($response));
         return;
@@ -201,6 +211,7 @@ function gh_updater_check_and_update() {
     }
 
     $latest_version_raw = $release_info->tag_name;
+    // バージョン番号から 'v' などのプレフィックスを削除
     $latest_version = ltrim($latest_version_raw, 'vV');
 
     $plugin_path = WP_PLUGIN_DIR . '/' . $settings['plugin_file'];
@@ -217,21 +228,27 @@ function gh_updater_check_and_update() {
         gh_updater_log("更新開始: 現在バージョン={$current_version}, 最新={$latest_version}");
         $download_url = "https://github.com/{$settings['github_user']}/{$settings['github_repo']}/releases/download/{$latest_version_raw}/{$settings['zip_name']}";
         gh_updater_log("ダウンロードURL: $download_url");
-        gh_updater_force_update($settings['plugin_file'], $download_url, $settings['github_token']);
+        gh_updater_force_update($settings['plugin_file'], $download_url);
     } else {
         gh_updater_log("更新不要: 現在バージョン={$current_version}, 最新={$latest_version}");
     }
 }
 
-// 強制アップデート（ZIPダウンロードにトークン対応）
-function gh_updater_force_update($plugin_file, $download_url, $token = '') {
+/**
+ * 強制的にプラグインを更新する関数
+ *
+ * @param string $plugin_file プラグインファイルパス
+ * @param string $download_url ダウンロードURL
+ */
+function gh_updater_force_update($plugin_file, $download_url) {
     if (!class_exists('WP_Upgrader_Skin')) {
         include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
     }
     if (!function_exists('download_url')) {
         include_once ABSPATH . 'wp-admin/includes/file.php';
     }
-
+    
+    // プラグインが有効化されているか確認し、一時的に無効化
     $active_plugins = get_option('active_plugins');
     $is_active = in_array($plugin_file, $active_plugins);
     if ($is_active) {
@@ -240,9 +257,8 @@ function gh_updater_force_update($plugin_file, $download_url, $token = '') {
     }
 
     gh_updater_log("ZIPダウンロード開始");
+    $tmp_file = download_url($download_url);
 
-    // トークン付きでダウンロード
-    $tmp_file = download_url_with_token($download_url, $token);
     if (is_wp_error($tmp_file)) {
         gh_updater_log('ZIPダウンロード失敗: ' . $tmp_file->get_error_message());
         return;
@@ -250,14 +266,9 @@ function gh_updater_force_update($plugin_file, $download_url, $token = '') {
     gh_updater_log("ZIPダウンロード完了: $tmp_file");
 
     $upgrader = new Plugin_Upgrader(new Automatic_Upgrader_Skin());
+    
     gh_updater_log("展開・アップグレード開始");
-    $result = $upgrader->run([
-        'package' => $tmp_file,
-        'destination' => WP_PLUGIN_DIR,
-        'clear_destination' => true,
-        'clear_working' => true,
-        'hook_extra' => ['plugin' => $plugin_file]
-    ]);
+    $result = $upgrader->run(['package' => $tmp_file, 'destination' => WP_PLUGIN_DIR, 'clear_destination' => true, 'clear_working' => true, 'hook_extra' => ['plugin' => $plugin_file]]);
 
     if (is_wp_error($result)) {
         gh_updater_log('更新失敗: ' . $result->get_error_message());
@@ -265,6 +276,7 @@ function gh_updater_force_update($plugin_file, $download_url, $token = '') {
         gh_updater_log('更新完了');
     }
 
+    // プラグインを再度有効化
     if ($is_active) {
         $result = activate_plugin($plugin_file);
         if (is_wp_error($result)) {
@@ -274,28 +286,8 @@ function gh_updater_force_update($plugin_file, $download_url, $token = '') {
         }
     }
 
-    @unlink($tmp_file);
+    @unlink($tmp_file); // 一時ファイル削除
 }
-
-// トークン対応ダウンロード関数
-function download_url_with_token($url, $token = '') {
-    $args = ['headers' => ['User-Agent' => 'WordPress']];
-    if (!empty($token)) {
-        $args['headers']['Authorization'] = 'token ' . $token;
-    }
-    $tmp_file = wp_tempnam($url);
-    $response = wp_remote_get($url, array_merge($args, ['timeout' => 300, 'stream' => true, 'filename' => $tmp_file]));
-
-    if (is_wp_error($response)) {
-        return $response;
-    }
-    if (wp_remote_retrieve_response_code($response) !== 200) {
-        return new WP_Error('download_error', 'HTTP ' . wp_remote_retrieve_response_code($response));
-    }
-
-    return $tmp_file;
-}
-
 
 
 function custom_external_featured_image($html, $post_id, $post_thumbnail_id, $size, $attr) {
@@ -1095,10 +1087,6 @@ function bg_render_dashboard_widget() {
 
 // 外部リンク＆クリック用リダイレクトリンクに rel="nofollow noopener sponsored"
 function add_sponsored_to_external_links($content) {
-    if (empty($content)) {
-        return $content; // 空なら処理せず返す
-    }
-
     $site_url = get_site_url();
     $image_extensions = ['jpg','jpeg','png','gif','webp','svg'];
 
