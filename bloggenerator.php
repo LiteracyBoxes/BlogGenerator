@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.3.1
+Version: 1.3.2
 Author: ken
 --- ChangeLog ---
-- 1おすすめカテゴリへの誘導パーツ挿入関数追加。 2ポップアップカテゴリ誘導修正
+- おすすめカテゴリへの誘導文の英語訳を修正
 */
 
 
@@ -725,8 +725,8 @@ function recommend_category_insert($content) {
         $title_text = 'この記事を読んだあとは、ついでにこちらの記事まで読まないと損！<br>次に必ず読んだほうがいい記事がこちら▼';
     } else {
         $category_name = 'Top Picks';
-        $link_text = 'Read the Top Picks Now';
-        $title_text = 'Based on this article, here are the top picks that 93% of our readers chose to read next.';
+        $link_text = 'Read the Next Must-Read Article';
+        $title_text = 'After reading this article, don’t miss out!<br>Here’s the must-read article you should check out next ▼';
     }
 
     $recommend_category = get_term_by('name', $category_name, 'category');
@@ -767,8 +767,8 @@ function recommend_category_popup() {
     } else {
         // 英語など、日本語以外の場合
         $category_name = 'Top Picks';
-        $popup_title = 'Based on this article, here are the top picks that 93% of our readers chose to read next.';
-        $popup_link_text = 'Read the Top Picks Now';
+        $popup_title = "After reading this article, don’t miss out!<br>Here’s the must-read article you should check out next ▼";
+        $popup_link_text = "Read the Next Must-Read Article";
     }
 
     // 決定したカテゴリ名でカテゴリ情報を取得
