@@ -6,16 +6,17 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.2.21
+Version: 1.3.1
 Author: ken
 --- ChangeLog ---
-- test
+- 1おすすめカテゴリへの誘導パーツ挿入関数追加。 2ポップアップカテゴリ誘導修正
 */
 
 
 if (!defined('ABSPATH')) exit;
 
 
+/* プラグイン自動更新 */
 // デフォルト設定
 function gh_updater_default_settings() {
     return [
@@ -711,6 +712,44 @@ add_filter('rss2_ns', function() {
 });
 
 
+// おすすめカテゴリへの誘導パーツ挿入
+function recommend_category_insert($content) {
+    if (!is_single() || !in_the_loop() || !is_main_query()) return $content;
+
+    // サイトの言語設定を取得
+    $site_lang = get_bloginfo('language');
+
+    if (strpos($site_lang, 'ja') === 0) {
+        $category_name = 'おすすめ';
+        $link_text = '次に読むべき記事へ';
+        $title_text = 'この記事を読んだあとは、ついでにこちらの記事まで読まないと損！<br>次に必ず読んだほうがいい記事がこちら▼';
+    } else {
+        $category_name = 'Top Picks';
+        $link_text = 'Read the Top Picks Now';
+        $title_text = 'Based on this article, here are the top picks that 93% of our readers chose to read next.';
+    }
+
+    $recommend_category = get_term_by('name', $category_name, 'category');
+    if (!$recommend_category) return $content;
+
+    $category_link = get_category_link($recommend_category->term_id);
+
+    // 挿入用HTML（ボタン中央寄せ）
+    $html = '<div class="recommend-category-box wp-block-cocoon-blocks-icon-box common-icon-box block-box alert-box" style="margin:20px 0;padding:15px;">';
+    $html .= '<p>' . wp_kses_post($title_text) . '</p>';
+    $html .= '<a href="' . esc_url($category_link) . '" style="display:block;width:100%;margin-top:-10px;padding:10px 20px;background:#0073aa;color:#fff;border-radius:5px;text-decoration:none;font-weight:bold;text-align:center;">' . esc_html($link_text) . '</a>';
+    $html .= '</div>';
+
+    // 最初のH2タグの直前に挿入
+    $content = preg_replace('/(<h2[^>]*>)/i', $html . '$1', $content, 1);
+
+    // 記事末尾に挿入
+    $content .= $html;
+
+    return $content;
+}
+add_filter('the_content', 'recommend_category_insert');
+
 
 /**
  * 言語に応じてカテゴリ名とポップアップのテキストを切り替える
@@ -723,8 +762,8 @@ function recommend_category_popup() {
     if (strpos($site_lang, 'ja') === 0) {
         // 日本語の場合
         $category_name = 'おすすめ';
-        $popup_title = 'この記事を読んだあなたへ：93%の人が次に読んでいる人気記事はこちら';
-        $popup_link_text = '次に読むべき人気記事を見てみる';
+        $popup_title = 'この記事を読んだあとは、ついでにこちらの記事まで読まないと損！<br>次に必ず読んだほうがいい記事がこちら▼';
+        $popup_link_text = '次に読むべき記事へ';
     } else {
         // 英語など、日本語以外の場合
         $category_name = 'Top Picks';
@@ -768,10 +807,11 @@ function recommend_category_popup() {
         .recommend-popup.visible {
             bottom: 0; /* 表示時に画面内に移動 */
         }
-        .recommend-popup h3 {
+        .recommend-popup p {
             margin-top: 0;
             padding-bottom: 0.5em;
-            font-size: 1rem;
+            font-size: 0.9rem;
+            font-weight: bold;
             color: #333;
         }
         .recommend-popup .popup-link {
@@ -802,7 +842,7 @@ function recommend_category_popup() {
 
     <div id="recommend-category-popup" class="recommend-popup">
         <button class="close-btn">&times;</button>
-        <h3><?php echo esc_html($popup_title); ?></h3>
+        <p><?php echo wp_kses_post($popup_title); ?></p>
         <a href="<?php echo esc_url( get_category_link( $recommend_category_id ) ); ?>" class="popup-link">
             <?php echo esc_html($popup_link_text); ?>
         </a>
@@ -1126,6 +1166,159 @@ function add_sponsored_to_external_links($content) {
 
 add_filter('the_content', 'add_sponsored_to_external_links', 20);
 
+
+// ===========================================================
+// この処理は、Meta や SEMrush のような不要/迷惑アクセスをブロック
+// Googlebot, Bingbot, Yandex など主要検索エンジンは許可
+// ===========================================================
+
+// ------------------------------
+// DBバージョン
+// ------------------------------
+define('UA_BLOCK_DB_VERSION', '1.0');
+
+// ------------------------------
+// テーブル作成
+// ------------------------------
+function ua_block_ensure_logs_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'ua_block_logs';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        ip varchar(100) NOT NULL,
+        ua text NOT NULL,
+        time datetime NOT NULL,
+        PRIMARY KEY (id),
+        KEY ip (ip),
+        KEY time (time)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+
+    if (get_option('ua_block_db_version') === false) {
+        add_option('ua_block_db_version', UA_BLOCK_DB_VERSION);
+    }
+}
+add_action('after_setup_theme', 'ua_block_ensure_logs_table');
+
+// ------------------------------
+// ブロック対象・許可UA
+// ------------------------------
+$blocked_user_agents = [
+    'meta-externalagent',
+    'SemrushBot',
+    'Bytespider',
+    // 必要に応じて追加
+];
+
+$allowed_search_engines = [
+    'googlebot',
+    'bingbot',
+    'yandex',
+];
+
+// ------------------------------
+// UAブロック＆ログ記録
+// ------------------------------
+add_action('init', function() use ($blocked_user_agents, $allowed_search_engines) {
+    if (!isset($_SERVER['HTTP_USER_AGENT'])) return;
+
+    $user_agent = strtolower($_SERVER['HTTP_USER_AGENT']);
+
+    // 許可検索エンジンはスキップ
+    foreach ($allowed_search_engines as $allowed_ua) {
+        if (strpos($user_agent, strtolower($allowed_ua)) !== false) return;
+    }
+
+    // ブロック対象チェック
+    foreach ($blocked_user_agents as $blocked_ua) {
+        if (strpos($user_agent, strtolower($blocked_ua)) !== false) {
+            // ------------------------------
+            // ブロックログ保存
+            // ------------------------------
+            global $wpdb;
+            $table = $wpdb->prefix . 'ua_block_logs';
+            $wpdb->insert($table, [
+                'ip'   => $_SERVER['REMOTE_ADDR'],
+                'ua'   => $_SERVER['HTTP_USER_AGENT'],
+                'time' => current_time('mysql'),
+            ]);
+
+            // 403 Forbidden
+            status_header(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Access denied.';
+            exit;
+        }
+    }
+});
+
+// ------------------------------
+// ダッシュボードウィジェット
+// ------------------------------
+function ua_block_dashboard_widget_full_width_css() {
+    echo '<style type="text/css">
+        @media screen and (min-width: 783px) {
+            #dashboard-widgets .postbox-container {
+                width: 100% !important;
+                float: none !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+        }
+    </style>';
+}
+add_action('admin_head', 'ua_block_dashboard_widget_full_width_css');
+
+function ua_block_add_dashboard_widget() {
+    if (current_user_can('manage_options')) {
+        wp_add_dashboard_widget(
+            'ua_block_dashboard_widget',
+            'ブロックされたUAログ',
+            'ua_block_render_dashboard_widget'
+        );
+    }
+}
+add_action('wp_dashboard_setup', 'ua_block_add_dashboard_widget');
+
+function ua_block_render_dashboard_widget() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'ua_block_logs';
+
+    $logs = $wpdb->get_results(
+        "SELECT ip, ua, time FROM {$table} ORDER BY time DESC LIMIT 20"
+    );
+
+    if (empty($logs)) {
+        echo "<p>直近のブロックはありません。</p>";
+        return;
+    }
+
+    echo '<div style="max-height: 400px; overflow-y: auto;">';
+    echo '<table style="width:100%; border-collapse: collapse; font-size: 0.8em;">';
+    echo '<thead><tr>';
+    echo '<th style="padding:5px;border:1px solid #ddd;">時刻</th>';
+    echo '<th style="padding:5px;border:1px solid #ddd;">IP</th>';
+    echo '<th style="padding:5px;border:1px solid #ddd;">User-Agent</th>';
+    echo '</tr></thead><tbody>';
+
+    foreach ($logs as $log) {
+        $ua_display = strlen($log->ua) > 50
+            ? substr($log->ua, 0, 30) . '...' . substr($log->ua, -17)
+            : $log->ua;
+
+        echo '<tr>';
+        echo "<td style='padding:5px;border:1px solid #ddd;'>{$log->time}</td>";
+        echo "<td style='padding:5px;border:1px solid #ddd; word-break: break-all;'>{$log->ip}</td>";
+        echo "<td style='padding:5px;border:1px solid #ddd; word-break: break-all;' title='" . esc_attr($log->ua) . "'>{$ua_display}</td>";
+        echo '</tr>';
+    }
+
+    echo '</tbody></table></div>';
+}
 
 // https://a-ippon.com/wp-admin/?run_external_thumbnail_update=1
 
