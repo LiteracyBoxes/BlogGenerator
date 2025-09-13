@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.3.2
+Version: 1.3.3
 Author: ken
 --- ChangeLog ---
-- おすすめカテゴリへの誘導文の英語訳を修正
+- UAブロック＆ログ記録をinit ではなく、WordPress が立ち上がった直後に実行
 */
 
 
@@ -918,6 +918,48 @@ function recommend_category_popup() {
 add_action('wp_footer', 'recommend_category_popup');
 
 
+// 外部リンク＆クリック用リダイレクトリンクに rel="nofollow noopener sponsored"
+function add_sponsored_to_external_links($content) {
+    $site_url = get_site_url();
+    $image_extensions = ['jpg','jpeg','png','gif','webp','svg'];
+
+    libxml_use_internal_errors(true);
+    $dom = new DOMDocument();
+    $dom->loadHTML(mb_convert_encoding($content, 'HTML-ENTITIES', 'UTF-8'));
+    libxml_clear_errors();
+
+    $anchors = $dom->getElementsByTagName('a');
+
+    foreach ($anchors as $anchor) {
+        $href = $anchor->getAttribute('href');
+        if (!$href) continue;
+
+        // 画像リンクは除外
+        $path_info = pathinfo(parse_url($href, PHP_URL_PATH));
+        if (isset($path_info['extension']) && in_array(strtolower($path_info['extension']), $image_extensions)) {
+            continue;
+        }
+
+        // 外部リンク判定
+        $is_external = (strpos($href, $site_url) !== 0 && preg_match('/^https?:\/\//i', $href));
+
+        // クリック用リダイレクトリンクも外部扱いにする
+        $is_click_redirect = (strpos($href, '?bg_click=1') !== false);
+
+        if ($is_external || $is_click_redirect) {
+            $anchor->setAttribute('rel', 'nofollow noopener sponsored');
+        }
+    }
+
+    $modified_html = $dom->saveHTML();
+    $body_start = strpos($modified_html, '<body>') + 6;
+    $body_end = strpos($modified_html, '</body>');
+    return substr($modified_html, $body_start, $body_end - $body_start);
+}
+
+add_filter('the_content', 'add_sponsored_to_external_links', 20);
+
+
 
 // ------------------------------
 // クリックログ保存 + 異常検知 + ダッシュボードウィジェット
@@ -1125,47 +1167,6 @@ function bg_render_dashboard_widget() {
     echo '</tbody></table></div>';
 }
 
-// 外部リンク＆クリック用リダイレクトリンクに rel="nofollow noopener sponsored"
-function add_sponsored_to_external_links($content) {
-    $site_url = get_site_url();
-    $image_extensions = ['jpg','jpeg','png','gif','webp','svg'];
-
-    libxml_use_internal_errors(true);
-    $dom = new DOMDocument();
-    $dom->loadHTML(mb_convert_encoding($content, 'HTML-ENTITIES', 'UTF-8'));
-    libxml_clear_errors();
-
-    $anchors = $dom->getElementsByTagName('a');
-
-    foreach ($anchors as $anchor) {
-        $href = $anchor->getAttribute('href');
-        if (!$href) continue;
-
-        // 画像リンクは除外
-        $path_info = pathinfo(parse_url($href, PHP_URL_PATH));
-        if (isset($path_info['extension']) && in_array(strtolower($path_info['extension']), $image_extensions)) {
-            continue;
-        }
-
-        // 外部リンク判定
-        $is_external = (strpos($href, $site_url) !== 0 && preg_match('/^https?:\/\//i', $href));
-
-        // クリック用リダイレクトリンクも外部扱いにする
-        $is_click_redirect = (strpos($href, '?bg_click=1') !== false);
-
-        if ($is_external || $is_click_redirect) {
-            $anchor->setAttribute('rel', 'nofollow noopener sponsored');
-        }
-    }
-
-    $modified_html = $dom->saveHTML();
-    $body_start = strpos($modified_html, '<body>') + 6;
-    $body_end = strpos($modified_html, '</body>');
-    return substr($modified_html, $body_start, $body_end - $body_start);
-}
-
-add_filter('the_content', 'add_sponsored_to_external_links', 20);
-
 
 // ===========================================================
 // この処理は、Meta や SEMrush のような不要/迷惑アクセスをブロック
@@ -1204,26 +1205,29 @@ function ua_block_ensure_logs_table() {
 }
 add_action('after_setup_theme', 'ua_block_ensure_logs_table');
 
-// ------------------------------
-// ブロック対象・許可UA
-// ------------------------------
+
+// ブロック対象の User-Agent
 $blocked_user_agents = [
     'meta-externalagent',
     'SemrushBot',
     'Bytespider',
-    // 必要に応じて追加
 ];
 
+// 許可する検索エンジン
 $allowed_search_engines = [
-    'googlebot',
-    'bingbot',
-    'yandex',
+    'googlebot',            // Google
+    'bingbot',              // Bing
+    'yandex',               // Yandex
+    'duckduckbot',          // DuckDuckGo
+    'baiduspider',          // Baidu
+    'naverbot',             // Naver
 ];
 
 // ------------------------------
 // UAブロック＆ログ記録
 // ------------------------------
-add_action('init', function() use ($blocked_user_agents, $allowed_search_engines) {
+// init ではなく、WordPress が立ち上がった直後に実行
+add_action('muplugins_loaded', function() use ($blocked_user_agents, $allowed_search_engines) {
     if (!isset($_SERVER['HTTP_USER_AGENT'])) return;
 
     $user_agent = strtolower($_SERVER['HTTP_USER_AGENT']);
@@ -1255,6 +1259,7 @@ add_action('init', function() use ($blocked_user_agents, $allowed_search_engines
         }
     }
 });
+
 
 // ------------------------------
 // ダッシュボードウィジェット
