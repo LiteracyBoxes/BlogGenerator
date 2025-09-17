@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.3.3
+Version: 1.3.4
 Author: ken
 --- ChangeLog ---
-- UAブロック＆ログ記録をinit ではなく、WordPress が立ち上がった直後に実行
+- UAブロック＆ログ記録をinit ではなく、WordPress が立ち上がった直後に実行するようにしたが正常に動作していないため、ロールバック
 */
 
 
@@ -1226,8 +1226,7 @@ $allowed_search_engines = [
 // ------------------------------
 // UAブロック＆ログ記録
 // ------------------------------
-// init ではなく、WordPress が立ち上がった直後に実行
-add_action('muplugins_loaded', function() use ($blocked_user_agents, $allowed_search_engines) {
+add_action('init', function() use ($blocked_user_agents, $allowed_search_engines) {
     if (!isset($_SERVER['HTTP_USER_AGENT'])) return;
 
     $user_agent = strtolower($_SERVER['HTTP_USER_AGENT']);
@@ -1259,7 +1258,6 @@ add_action('muplugins_loaded', function() use ($blocked_user_agents, $allowed_se
         }
     }
 });
-
 
 // ------------------------------
 // ダッシュボードウィジェット
@@ -1324,76 +1322,3 @@ function ua_block_render_dashboard_widget() {
 
     echo '</tbody></table></div>';
 }
-
-// https://a-ippon.com/wp-admin/?run_external_thumbnail_update=1
-
-// アイキャッチ用カスタムフィールドが空なら記事の最初の画像をアイキャッチ用カスタムフィールドexternal_thumbnailに登録
-/*
-add_action('admin_init', function () {
-  if (!current_user_can('administrator')) return;
-
-  if (!isset($_GET['run_external_thumbnail_update'])) return;
-
-  // ========================
-  // ① external_thumbnail が未設定の投稿に登録
-  // ========================
-  $args = [
-    'post_type' => 'post',
-    'posts_per_page' => -1,
-    'post_status' => 'any',
-    'meta_query' => [
-      [
-        'key' => 'external_thumbnail',
-        'compare' => 'NOT EXISTS',
-      ],
-    ],
-  ];
-
-  $query = new WP_Query($args);
-  $count = 0;
-
-  foreach ($query->posts as $post) {
-    $content = $post->post_content;
-
-    if (preg_match('/<img[^>]+src=[\'"]([^\'"]+)[\'"]/i', $content, $matches)) {
-      $image_url = esc_url_raw($matches[1]);
-
-      if (strpos($image_url, 'http') === 0) {
-        update_post_meta($post->ID, 'external_thumbnail', $image_url);
-        $count++;
-      }
-    }
-  }
-
-  echo "<div class='notice notice-success'><p>{$count} 件の投稿に external_thumbnail を追加しました。</p></div>";
-
-  // ========================
-  // ② メディアを完全削除（boy.jpg / girl.jpg は除外）
-  // ========================
-  $excluded_filenames = ['boy.jpg', 'girl.jpg'];
-  $deleted = 0;
-
-  $media_query = new WP_Query([
-    'post_type' => 'attachment',
-    'post_status' => 'inherit',
-    'posts_per_page' => -1,
-    'fields' => 'ids',
-  ]);
-
-  foreach ($media_query->posts as $attachment_id) {
-    $url = wp_get_attachment_url($attachment_id);
-    $basename = basename($url);
-
-    // boy.jpg / girl.jpg はスキップ
-    if (in_array($basename, $excluded_filenames)) {
-      continue;
-    }
-
-    if (wp_delete_attachment($attachment_id, true)) {
-      $deleted++;
-    }
-  }
-
-  echo "<div class='notice notice-warning'><p>{$deleted} 件のメディアを完全に削除しました（boy.jpg / girl.jpg は除外）。</p></div>";
-});
-*/
