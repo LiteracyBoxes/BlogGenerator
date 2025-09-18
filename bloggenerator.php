@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.3.4
+Version: 1.4.0
 Author: ken
 --- ChangeLog ---
-- UAブロック＆ログ記録をinit ではなく、WordPress が立ち上がった直後に実行するようにしたが正常に動作していないため、ロールバック
+- 1 機能追加 / 年齢確認ポップアップ追加。　2 バグ修正 / UAブロック＆外部リンククリックログ関数に優先順位付与。
 */
 
 
@@ -961,6 +961,161 @@ add_filter('the_content', 'add_sponsored_to_external_links', 20);
 
 
 
+// ===========================================================
+// この処理は、Meta や SEMrush のような不要/迷惑アクセスをブロック
+// Googlebot, Bingbot, Yandex など主要検索エンジンは許可
+// ===========================================================
+
+// ------------------------------
+// DBバージョン
+// ------------------------------
+define('UA_BLOCK_DB_VERSION', '1.0');
+
+// ------------------------------
+// テーブル作成
+// ------------------------------
+function ua_block_ensure_logs_table() {
+    global $wpdb;
+    $table_name = $wpdb->prefix . 'ua_block_logs';
+    $charset_collate = $wpdb->get_charset_collate();
+
+    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+        ip varchar(100) NOT NULL,
+        ua text NOT NULL,
+        time datetime NOT NULL,
+        PRIMARY KEY (id),
+        KEY ip (ip),
+        KEY time (time)
+    ) $charset_collate;";
+
+    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+    dbDelta($sql);
+
+    if (get_option('ua_block_db_version') === false) {
+        add_option('ua_block_db_version', UA_BLOCK_DB_VERSION);
+    }
+}
+add_action('after_setup_theme', 'ua_block_ensure_logs_table');
+
+
+// ブロック対象の User-Agent
+$blocked_user_agents = [
+    'meta-externalagent',
+    'SemrushBot',
+    'Bytespider',
+];
+
+// 許可する検索エンジン
+$allowed_search_engines = [
+    'googlebot',            // Google
+    'bingbot',              // Bing
+    'yandex',               // Yandex
+    'duckduckbot',          // DuckDuckGo
+    'baiduspider',          // Baidu
+    'naverbot',             // Naver
+];
+
+// ------------------------------
+// UAブロック＆ログ記録
+// ------------------------------
+add_action('init', function() use ($blocked_user_agents, $allowed_search_engines) {
+    if (!isset($_SERVER['HTTP_USER_AGENT'])) return;
+
+    $user_agent = strtolower($_SERVER['HTTP_USER_AGENT']);
+
+    // 許可検索エンジンはスキップ
+    foreach ($allowed_search_engines as $allowed_ua) {
+        if (strpos($user_agent, strtolower($allowed_ua)) !== false) return;
+    }
+
+    // ブロック対象チェック
+    foreach ($blocked_user_agents as $blocked_ua) {
+        if (strpos($user_agent, strtolower($blocked_ua)) !== false) {
+            // ------------------------------
+            // ブロックログ保存
+            // ------------------------------
+            global $wpdb;
+            $table = $wpdb->prefix . 'ua_block_logs';
+            $wpdb->insert($table, [
+                'ip'   => $_SERVER['REMOTE_ADDR'],
+                'ua'   => $_SERVER['HTTP_USER_AGENT'],
+                'time' => current_time('mysql'),
+            ]);
+
+            // 403 Forbidden
+            status_header(403);
+            header('Content-Type: text/plain; charset=utf-8');
+            echo 'Access denied.';
+            exit;
+        }
+    }
+}, 1); // 優先度を1に指定
+
+// ------------------------------
+// ダッシュボードウィジェット
+// ------------------------------
+function ua_block_dashboard_widget_full_width_css() {
+    echo '<style type="text/css">
+        @media screen and (min-width: 783px) {
+            #dashboard-widgets .postbox-container {
+                width: 100% !important;
+                float: none !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+            }
+        }
+    </style>';
+}
+add_action('admin_head', 'ua_block_dashboard_widget_full_width_css');
+
+function ua_block_add_dashboard_widget() {
+    if (current_user_can('manage_options')) {
+        wp_add_dashboard_widget(
+            'ua_block_dashboard_widget',
+            'ブロックされたUAログ',
+            'ua_block_render_dashboard_widget'
+        );
+    }
+}
+add_action('wp_dashboard_setup', 'ua_block_add_dashboard_widget');
+
+function ua_block_render_dashboard_widget() {
+    global $wpdb;
+    $table = $wpdb->prefix . 'ua_block_logs';
+
+    $logs = $wpdb->get_results(
+        "SELECT ip, ua, time FROM {$table} ORDER BY time DESC LIMIT 20"
+    );
+
+    if (empty($logs)) {
+        echo "<p>直近のブロックはありません。</p>";
+        return;
+    }
+
+    echo '<div style="max-height: 400px; overflow-y: auto;">';
+    echo '<table style="width:100%; border-collapse: collapse; font-size: 0.8em;">';
+    echo '<thead><tr>';
+    echo '<th style="padding:5px;border:1px solid #ddd;">時刻</th>';
+    echo '<th style="padding:5px;border:1px solid #ddd;">IP</th>';
+    echo '<th style="padding:5px;border:1px solid #ddd;">User-Agent</th>';
+    echo '</tr></thead><tbody>';
+
+    foreach ($logs as $log) {
+        $ua_display = strlen($log->ua) > 50
+            ? substr($log->ua, 0, 30) . '...' . substr($log->ua, -17)
+            : $log->ua;
+
+        echo '<tr>';
+        echo "<td style='padding:5px;border:1px solid #ddd;'>{$log->time}</td>";
+        echo "<td style='padding:5px;border:1px solid #ddd; word-break: break-all;'>{$log->ip}</td>";
+        echo "<td style='padding:5px;border:1px solid #ddd; word-break: break-all;' title='" . esc_attr($log->ua) . "'>{$ua_display}</td>";
+        echo '</tr>';
+    }
+
+    echo '</tbody></table></div>';
+}
+
 // ------------------------------
 // クリックログ保存 + 異常検知 + ダッシュボードウィジェット
 // ------------------------------
@@ -1041,7 +1196,7 @@ function bg_handle_click_redirect() {
         }
     }
 }
-add_action('init', 'bg_handle_click_redirect');
+add_action('init', 'bg_handle_click_redirect', 10);
 
 
 // ------------------------------
@@ -1168,157 +1323,54 @@ function bg_render_dashboard_widget() {
 }
 
 
-// ===========================================================
-// この処理は、Meta や SEMrush のような不要/迷惑アクセスをブロック
-// Googlebot, Bingbot, Yandex など主要検索エンジンは許可
-// ===========================================================
+// ===============================
+// SEO安全・年齢確認ポップアップ（サイト単位でON/OFF）
+// ===============================
 
-// ------------------------------
-// DBバージョン
-// ------------------------------
-define('UA_BLOCK_DB_VERSION', '1.0');
+class WP_Age_Gate {
 
-// ------------------------------
-// テーブル作成
-// ------------------------------
-function ua_block_ensure_logs_table() {
-    global $wpdb;
-    $table_name = $wpdb->prefix . 'ua_block_logs';
-    $charset_collate = $wpdb->get_charset_collate();
+  public function __construct() {
+    add_action( 'admin_init', [$this, 'register_setting_field'] );
+    add_action( 'wp_enqueue_scripts', [$this, 'enqueue_files'] );
+    add_action( 'wp_footer', [$this, 'output_overlay'] );
+  }
 
-    $sql = "CREATE TABLE IF NOT EXISTS $table_name (
-        id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-        ip varchar(100) NOT NULL,
-        ua text NOT NULL,
-        time datetime NOT NULL,
-        PRIMARY KEY (id),
-        KEY ip (ip),
-        KEY time (time)
-    ) $charset_collate;";
+  // 管理画面 > 設定 > 一般 にチェックボックスを追加
+  public function register_setting_field() {
+    register_setting( 'general', 'wp_age_gate_enable', [
+      'type' => 'boolean',
+      'default' => false,
+    ]);
 
-    require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-    dbDelta($sql);
-
-    if (get_option('ua_block_db_version') === false) {
-        add_option('ua_block_db_version', UA_BLOCK_DB_VERSION);
-    }
-}
-add_action('after_setup_theme', 'ua_block_ensure_logs_table');
-
-
-// ブロック対象の User-Agent
-$blocked_user_agents = [
-    'meta-externalagent',
-    'SemrushBot',
-    'Bytespider',
-];
-
-// 許可する検索エンジン
-$allowed_search_engines = [
-    'googlebot',            // Google
-    'bingbot',              // Bing
-    'yandex',               // Yandex
-    'duckduckbot',          // DuckDuckGo
-    'baiduspider',          // Baidu
-    'naverbot',             // Naver
-];
-
-// ------------------------------
-// UAブロック＆ログ記録
-// ------------------------------
-add_action('init', function() use ($blocked_user_agents, $allowed_search_engines) {
-    if (!isset($_SERVER['HTTP_USER_AGENT'])) return;
-
-    $user_agent = strtolower($_SERVER['HTTP_USER_AGENT']);
-
-    // 許可検索エンジンはスキップ
-    foreach ($allowed_search_engines as $allowed_ua) {
-        if (strpos($user_agent, strtolower($allowed_ua)) !== false) return;
-    }
-
-    // ブロック対象チェック
-    foreach ($blocked_user_agents as $blocked_ua) {
-        if (strpos($user_agent, strtolower($blocked_ua)) !== false) {
-            // ------------------------------
-            // ブロックログ保存
-            // ------------------------------
-            global $wpdb;
-            $table = $wpdb->prefix . 'ua_block_logs';
-            $wpdb->insert($table, [
-                'ip'   => $_SERVER['REMOTE_ADDR'],
-                'ua'   => $_SERVER['HTTP_USER_AGENT'],
-                'time' => current_time('mysql'),
-            ]);
-
-            // 403 Forbidden
-            status_header(403);
-            header('Content-Type: text/plain; charset=utf-8');
-            echo 'Access denied.';
-            exit;
-        }
-    }
-});
-
-// ------------------------------
-// ダッシュボードウィジェット
-// ------------------------------
-function ua_block_dashboard_widget_full_width_css() {
-    echo '<style type="text/css">
-        @media screen and (min-width: 783px) {
-            #dashboard-widgets .postbox-container {
-                width: 100% !important;
-                float: none !important;
-                margin-left: 0 !important;
-                margin-right: 0 !important;
-            }
-        }
-    </style>';
-}
-add_action('admin_head', 'ua_block_dashboard_widget_full_width_css');
-
-function ua_block_add_dashboard_widget() {
-    if (current_user_can('manage_options')) {
-        wp_add_dashboard_widget(
-            'ua_block_dashboard_widget',
-            'ブロックされたUAログ',
-            'ua_block_render_dashboard_widget'
-        );
-    }
-}
-add_action('wp_dashboard_setup', 'ua_block_add_dashboard_widget');
-
-function ua_block_render_dashboard_widget() {
-    global $wpdb;
-    $table = $wpdb->prefix . 'ua_block_logs';
-
-    $logs = $wpdb->get_results(
-        "SELECT ip, ua, time FROM {$table} ORDER BY time DESC LIMIT 20"
+    add_settings_field(
+      'wp_age_gate_enable',
+      '年齢確認ポップアップを有効化',
+      function() {
+        $val = get_option( 'wp_age_gate_enable', false );
+        echo '<label><input type="checkbox" name="wp_age_gate_enable" value="1" ' . checked(1, $val, false) . '> 有効化する</label>';
+      },
+      'general'
     );
+  }
 
-    if (empty($logs)) {
-        echo "<p>直近のブロックはありません。</p>";
-        return;
-    }
+  public function enqueue_files() {
+    if ( ! get_option( 'wp_age_gate_enable', false ) ) return;
+    wp_enqueue_style( 'wp-age-gate', plugin_dir_url( __FILE__ ) . 'css/age-gate.css', [], '1.0.0' );
+    wp_enqueue_script( 'wp-age-gate', plugin_dir_url( __FILE__ ) . 'js/age-gate.js', ['jquery'], '1.0.0', true );
+  }
 
-    echo '<div style="max-height: 400px; overflow-y: auto;">';
-    echo '<table style="width:100%; border-collapse: collapse; font-size: 0.8em;">';
-    echo '<thead><tr>';
-    echo '<th style="padding:5px;border:1px solid #ddd;">時刻</th>';
-    echo '<th style="padding:5px;border:1px solid #ddd;">IP</th>';
-    echo '<th style="padding:5px;border:1px solid #ddd;">User-Agent</th>';
-    echo '</tr></thead><tbody>';
-
-    foreach ($logs as $log) {
-        $ua_display = strlen($log->ua) > 50
-            ? substr($log->ua, 0, 30) . '...' . substr($log->ua, -17)
-            : $log->ua;
-
-        echo '<tr>';
-        echo "<td style='padding:5px;border:1px solid #ddd;'>{$log->time}</td>";
-        echo "<td style='padding:5px;border:1px solid #ddd; word-break: break-all;'>{$log->ip}</td>";
-        echo "<td style='padding:5px;border:1px solid #ddd; word-break: break-all;' title='" . esc_attr($log->ua) . "'>{$ua_display}</td>";
-        echo '</tr>';
-    }
-
-    echo '</tbody></table></div>';
+  public function output_overlay() {
+    if ( ! get_option( 'wp_age_gate_enable', false ) ) return;
+    ?>
+    <div id="age-overlay">
+      <div id="age-box">
+        <p>18歳以上ですか？<br><small>このサイトには成人向け内容が含まれます。</small></p>
+        <button id="enter-btn">はい、18歳以上です</button>
+        <button id="exit-btn">いいえ、退出します</button>
+      </div>
+    </div>
+    <?php
+  }
 }
+
+new WP_Age_Gate();
