@@ -6,7 +6,7 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.4.0
+Version: 1.4.1
 Author: ken
 --- ChangeLog ---
 - 1 機能追加 / 年齢確認ポップアップ追加。　2 バグ修正 / UAブロック＆外部リンククリックログ関数に優先順位付与。
