@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.4.11
+Version: 1.4.12
 Author: ken
 --- ChangeLog ---
-- 1 機能追加 / 年齢確認ポップアップ追加。　2 バグ修正 / UAブロック＆外部リンククリックログ関数に優先順位付与。 / ディレクトリ構造修正
+- AI生成時の箇条書きバグ修正
 */
 
 
@@ -418,6 +418,35 @@ function box_Boy_func( $atts, $content = null ) {
   return $box_Boy;
 }
 add_shortcode('box_Boy', 'box_Boy_func');
+
+
+
+// AI生成時の箇条書きバグ修正
+// 不要な閉じ→開きの間のブロックを削除
+function clean_adjacent_boxcheck_gaps( $content ) {
+    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Check\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Check\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
+    return preg_replace( $pattern, '', $content );
+}
+add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
+
+function clean_adjacent_boxcheck_gaps( $content ) {
+    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Lead\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Lead\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
+    return preg_replace( $pattern, '', $content );
+}
+add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
+
+function clean_adjacent_boxcheck_gaps( $content ) {
+    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Section\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Section\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
+    return preg_replace( $pattern, '', $content );
+}
+add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
+
+function clean_adjacent_boxcheck_gaps( $content ) {
+    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Chui\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Chui\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
+    return preg_replace( $pattern, '', $content );
+}
+add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
+
 
 // ショートコード：[box_Lead][/box_Lead]
 function box_Lead_func( $atts, $content = null ) {
