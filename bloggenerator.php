@@ -423,29 +423,27 @@ add_shortcode('box_Boy', 'box_Boy_func');
 
 // AI生成時の箇条書きバグ修正
 // 不要な閉じ→開きの間のブロックを削除
-function clean_adjacent_boxcheck_gaps( $content ) {
-    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Check\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Check\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
-    return preg_replace( $pattern, '', $content );
-}
-add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
+function clean_adjacent_box_blocks( $content ) {
+    $patterns = [
+        // [box_Check]
+        '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Check\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Check\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is',
+        // [box_Lead]
+        '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Lead\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Lead\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is',
+        // [box_Section]
+        '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Section\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Section\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is',
+        // [box_Chui]
+        '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Chui\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Chui\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is',
+    ];
 
-function clean_adjacent_boxcheck_gaps( $content ) {
-    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Lead\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Lead\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
-    return preg_replace( $pattern, '', $content );
-}
-add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
+    foreach ( $patterns as $pattern ) {
+        $content = preg_replace( $pattern, '', $content );
+    }
 
-function clean_adjacent_boxcheck_gaps( $content ) {
-    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Section\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Section\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
-    return preg_replace( $pattern, '', $content );
+    return $content;
 }
-add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
 
-function clean_adjacent_boxcheck_gaps( $content ) {
-    $pattern = '#</ul>\s*<!--\s*/wp:list\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[/box_Chui\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:shortcode\s*-->\s*\[box_Chui\]\s*<!--\s*/wp:shortcode\s*-->\s*<!--\s*wp:list\s*-->\s*<ul class="wp-block-list">#is';
-    return preg_replace( $pattern, '', $content );
-}
-add_filter( 'the_content', 'clean_adjacent_boxcheck_gaps', 0 );
+// 優先度 5 でショートコード展開前に実行
+add_filter( 'the_content', 'clean_adjacent_box_blocks', 0 );
 
 
 // ショートコード：[box_Lead][/box_Lead]
