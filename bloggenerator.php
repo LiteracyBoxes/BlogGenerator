@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.4.13
+Version: 1.4.14
 Author: ken
 --- ChangeLog ---
-- AI生成時の箇条書きバグ修正
+- セキュリティプラグインの影響で記事が表示されない不具合調査のためのテストアップデート01
 */
 
 
@@ -443,7 +443,7 @@ function clean_adjacent_box_blocks( $content ) {
 }
 
 // 優先度 5 でショートコード展開前に実行
-add_filter( 'the_content', 'clean_adjacent_box_blocks', 0 );
+add_filter( 'the_content', 'clean_adjacent_box_blocks', 2 );
 
 
 // ショートコード：[box_Lead][/box_Lead]
@@ -1026,21 +1026,23 @@ function ua_block_ensure_logs_table() {
 add_action('after_setup_theme', 'ua_block_ensure_logs_table');
 
 
-// ブロック対象の User-Agent
+// ブロック対象の User-Agent（全部小文字）
 $blocked_user_agents = [
     'meta-externalagent',
-    'SemrushBot',
-    'Bytespider',
+    'semrushbot',
+    'bytespider',
+    'brightbot',
+    'ahrefsbot',
 ];
 
-// 許可する検索エンジン
+// 許可する検索エンジン（全部小文字）
 $allowed_search_engines = [
-    'googlebot',            // Google
-    'bingbot',              // Bing
-    'yandex',               // Yandex
-    'duckduckbot',          // DuckDuckGo
-    'baiduspider',          // Baidu
-    'naverbot',             // Naver
+    'googlebot',
+    'bingbot',
+    'yandex',
+    'duckduckbot',
+    'baiduspider',
+    'naverbot',
 ];
 
 // ------------------------------
