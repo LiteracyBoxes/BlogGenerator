@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.4.14
+Version: 1.5.0
 Author: ken
 --- ChangeLog ---
-- セキュリティプラグインの影響で記事が表示されない不具合調査のためのテストアップデート01
+- styleタグ挿入関数追加。テーブル用cssを適用
 */
 
 
@@ -947,6 +947,9 @@ add_action('wp_footer', 'recommend_category_popup');
 
 // 外部リンク＆クリック用リダイレクトリンクに rel="nofollow noopener sponsored"
 function add_sponsored_to_external_links($content) {
+    if (empty($content)) {
+        return $content; // 空なら処理せず返す
+    }
     $site_url = get_site_url();
     $image_extensions = ['jpg','jpeg','png','gif','webp','svg'];
 
@@ -1403,3 +1406,20 @@ class WP_Age_Gate {
 }
 
 new WP_Age_Gate();
+
+function add_inline_table_css() {
+    echo '<style>
+        #content figure.custom-table {
+            width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #content figure.custom-table table {
+            width: 100%;
+        }
+        .custom-table thead {
+            background-color: #eee;
+        }
+    </style>';
+}
+add_action('wp_head', 'add_inline_table_css');
