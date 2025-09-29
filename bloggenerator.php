@@ -6,10 +6,10 @@ Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Plugin URI: https://github.com/LiteracyBoxes/BlogGenerator
 GitHub Branch: main
 Description: ブログ用のカスタム関数をまとめたプラグイン
-Version: 1.5.0
+Version: 1.5.1
 Author: ken
 --- ChangeLog ---
-- styleタグ挿入関数追加。テーブル用cssを適用
+- テーブル用cssを一部訂正
 */
 
 
@@ -1036,6 +1036,7 @@ $blocked_user_agents = [
     'bytespider',
     'brightbot',
     'ahrefsbot',
+    'dotbot',
 ];
 
 // 許可する検索エンジン（全部小文字）
@@ -1417,8 +1418,13 @@ function add_inline_table_css() {
         #content figure.custom-table table {
             width: 100%;
         }
-        .custom-table thead {
-            background-color: #eee;
+        .custom-table thead{
+            color: #fff;
+            background-color:#ffc107;
+            border-bottom-color:#aaa;
+        }
+        .custom-table th{
+            padding: 12px 6px;
         }
     </style>';
 }
